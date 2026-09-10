@@ -1,0 +1,25 @@
+# TDEI QGIS Plugin metadata
+
+[general]
+name=TDEI
+qgisMinimumVersion=3.28
+qgisMaximumVersion=3.99
+description=Production TDEI OpenSidewalks tools for QGIS — sign in, browse datasets, load OSW layers, and submit jobs.
+version=1.0.0
+author=TDEI
+email=support@tdei.us
+
+about=Sign in to TDEI, browse datasets, load OpenSidewalks (OSW) layers into QGIS, and submit TDEI processing jobs. Designed for maintainability, secure token handling, and future QGIS upgrades.
+
+tracker=https://github.com/MashB/QGIS-Test/issues
+repository=https://github.com/MashB/QGIS-Test
+homepage=https://tdei.us
+
+hasProcessingProvider=no
+tags=python,tdei,osw,opensidewalks,accessibility,transportation
+category=Plugins
+icon=icon.png
+experimental=False
+deprecated=False
+server=False
+changelog=1.0.0 - Production architecture: layered design, auth subsystem, theme, background workers, docs

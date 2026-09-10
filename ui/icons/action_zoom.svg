@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Hollow lens + thick handle — stays clear at 16–18px -->
+  <circle cx="10" cy="10" r="6" stroke="#000000" stroke-width="2.4"/>
+  <path d="M14.7 14.7L20.2 20.2" stroke="#000000" stroke-width="2.6" stroke-linecap="round"/>
+</svg>

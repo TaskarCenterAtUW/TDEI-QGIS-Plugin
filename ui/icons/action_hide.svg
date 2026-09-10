@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Hide panel: window slides away to the right -->
+  <rect x="3.5" y="5.5" width="11" height="13" rx="1.5" stroke="#FFFFFF" stroke-width="1.6"/>
+  <path d="M12 12h8" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M16.5 8.5L20 12l-3.5 3.5" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

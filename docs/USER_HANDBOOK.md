@@ -60,11 +60,11 @@ You don't need to install anything else. The plugin runs on the Python that ship
 
 ## 3. Install the plugin
 
-You'll normally get the plugin as a ZIP file, such as `tdei.zip`, from your team.
+The plugin is installed from a ZIP file, `tdei.zip`, found in the `dist` folder of the plugin repository (`dist/tdei.zip`).
 
 1. In QGIS, open **Plugins → Manage and Install Plugins…**
 2. Choose **Install from ZIP** in the left sidebar.
-3. Browse to `tdei.zip` and click **Install Plugin**.
+3. Browse to `dist/tdei.zip` and click **Install Plugin**.
 4. Go to **Installed** and make sure **TDEI** is ticked.
 
 ![Install from ZIP dialog in QGIS Plugin Manager](images/handbook/03-install-from-zip.png)

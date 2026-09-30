@@ -33,8 +33,9 @@ from ..components import tinted_icon
 from ..styles import colors, dimensions, typography
 from .map_overlay import apply_glass_frame, pointer_over_overlay
 
-# Empty combo data = my groups (include_my_groups=true).
-_MY_GROUPS_DATA = ""
+# Combo sentinels (not real project-group UUIDs).
+_ALL_GROUPS_DATA = "all"
+_MY_GROUPS_DATA = "myProjectGroups"
 _STATUS_ALL = "All"
 _RESULT_LIMIT = 10
 _AREA_ICON_SIZE = 22
@@ -327,9 +328,11 @@ class MapSearchBar(QFrame):
             self.tr("Project group"),
             self.tr(
                 "Filter map search by project group. "
+                "All applies no group filter. "
                 "My Project Groups includes all of your groups."
             ),
         )
+        self._groups.addItem(self.tr("All"), _ALL_GROUPS_DATA)
         self._groups.addItem(self.tr("My Project Groups"), _MY_GROUPS_DATA)
         self._groups.currentIndexChanged.connect(self._on_group_changed)
         filters_layout.addWidget(
@@ -608,8 +611,9 @@ class MapSearchBar(QFrame):
         block.setFixedHeight(title_h + hint_h + max(0, spacing))
 
     def selected_project_group_id(self) -> str:
+        """Return combo data: ``all``, ``myProjectGroups``, or a group UUID."""
         data = self._groups.currentData()
-        return str(data or "").strip()
+        return str(data or "").strip() or _MY_GROUPS_DATA
 
     def selected_status(self) -> str:
         data = self._status.currentData()
@@ -864,43 +868,36 @@ class MapSearchBar(QFrame):
         selected_id: str = "",
         admin_mode: bool = False,
     ) -> None:
-        """Populate combo: All/My groups + *groups* (id/name objects).
+        """Populate combo: All + My Project Groups + *groups*.
 
-        *admin_mode* uses “All project groups” (no include_my_groups filter)
-        as the empty selection; otherwise “My Project Groups”.
+        *selected_id* may be ``all``, ``myProjectGroups``, a group UUID, or
+        empty (defaults to **All**). *admin_mode* is kept for callers but no
+        longer changes the default selection.
         """
-        wanted = (selected_id or "").strip()
+        wanted = (selected_id or "").strip() or _ALL_GROUPS_DATA
         self._syncing_groups = True
         self._groups.blockSignals(True)
         self._groups.clear()
-        first_label = (
-            self.tr("All project groups")
-            if admin_mode
-            else self.tr("My Project Groups")
-        )
-        self._groups.addItem(first_label, _MY_GROUPS_DATA)
+        self._groups.addItem(self.tr("All"), _ALL_GROUPS_DATA)
+        self._groups.addItem(self.tr("My Project Groups"), _MY_GROUPS_DATA)
         for group in groups or ():
             group_id = str(getattr(group, "id", "") or "").strip()
             if not group_id:
                 continue
             name = str(getattr(group, "name", "") or "").strip() or group_id
             self._groups.addItem(name, group_id)
-        index = self._groups.findData(wanted) if wanted else 0
+        index = self._groups.findData(wanted)
+        if index < 0:
+            index = self._groups.findData(_ALL_GROUPS_DATA)
         if index < 0:
             index = 0
         self._groups.setCurrentIndex(index)
         self._groups.blockSignals(False)
         self._syncing_groups = False
-        tip = (
-            self.tr(
-                "Filter map search by project group. "
-                "All project groups applies no group filter."
-            )
-            if admin_mode
-            else self.tr(
-                "Filter map search by project group. "
-                "My Project Groups includes all of your groups."
-            )
+        tip = self.tr(
+            "Filter map search by project group. "
+            "All applies no group filter. "
+            "My Project Groups includes all of your groups."
         )
         try:
             self._groups.setToolTip(tip)

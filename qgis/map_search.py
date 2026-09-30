@@ -273,10 +273,10 @@ class MapSearchController(QObject):
                 selected = str(current.id).strip()
         except Exception:  # noqa: BLE001
             selected = ""
-        # Prefer "My Project Groups" / admin "All groups" as the map-search default.
+        # Prefer "All" as the map-search default.
         self._project_group_id = ""
         self._bar.set_project_groups(
-            [], selected_id="", admin_mode=self._is_tdei_admin()
+            [], selected_id="all", admin_mode=self._is_tdei_admin()
         )
 
         worker = self._container.workers.submit(
@@ -310,12 +310,20 @@ class MapSearchController(QObject):
             return False
 
     def _map_search_scope(self, group_id: str):
-        """Admin with no group → no filter; otherwise my-groups or selected id."""
-        if str(group_id or "").strip():
-            return DatasetScope.MY_PROJECT_GROUPS
-        if self._is_tdei_admin():
+        """Map combo data → DatasetScope (All / my-groups / specific id)."""
+        gid = str(group_id or "").strip()
+        if gid == DatasetScope.ALL.value or gid.casefold() == "all":
             return DatasetScope.ALL
-        return DatasetScope.MY_PROJECT_GROUPS
+        if not gid or gid == DatasetScope.MY_PROJECT_GROUPS.value:
+            return DatasetScope.MY_PROJECT_GROUPS
+        return DatasetScope.CURRENT_PROJECT_GROUP
+
+    def _map_search_project_group_id(self, group_id: str) -> Optional[str]:
+        """Real project-group UUID for the API, or None for All / My Groups."""
+        if self._map_search_scope(group_id) != DatasetScope.CURRENT_PROJECT_GROUP:
+            return None
+        gid = str(group_id or "").strip()
+        return gid or None
 
     def _on_project_groups_loaded(self, groups) -> None:
         if not self._active or self._bar is None:
@@ -323,7 +331,7 @@ class MapSearchController(QObject):
         is_admin = self._is_tdei_admin()
         self._bar.set_project_groups(
             groups or [],
-            selected_id="",
+            selected_id="all",
             admin_mode=is_admin,
         )
         self._project_group_id = self._bar.selected_project_group_id()
@@ -336,7 +344,7 @@ class MapSearchController(QObject):
         LOG.warning("Could not load project groups for map search: %s", exc)
         if self._bar is not None:
             self._bar.set_project_groups(
-                [], selected_id="", admin_mode=self._is_tdei_admin()
+                [], selected_id="all", admin_mode=self._is_tdei_admin()
             )
 
     def _on_project_group_changed(self, group_id: str) -> None:
@@ -693,7 +701,7 @@ class MapSearchController(QObject):
             wsen,
             page_size=10,
             scope=self._map_search_scope(group_id),
-            project_group_id=group_id or None,
+            project_group_id=self._map_search_project_group_id(group_id),
             name=name,
             status=status,
         )
@@ -732,8 +740,7 @@ class MapSearchController(QObject):
         LOG.info(
             "Map search bbox=%s group=%s status=%s name=%r → %s datasets, %s areas",
             bbox_csv,
-            self._project_group_id
-            or ("all" if self._is_tdei_admin() else "my_groups"),
+            self._project_group_id or "my_groups",
             self._status_filter or "All",
             self._name_filter or "",
             len(rows),

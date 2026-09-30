@@ -96,6 +96,9 @@ class ServiceContainer:
         self.open_jobs = None
         self.request_sync = None
         self.sync_map_chrome = None
+        # Set by plugin — hide / restore map overlays around a map tool (clip).
+        self.hide_map_panels = None
+        self.restore_map_panels = None
         # Optional: DatasetsPage.notify_dataset_loaded after external download.
         self.on_dataset_loaded = None
         # Optional controllers (map search / clip / OSW preview).

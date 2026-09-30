@@ -34,6 +34,7 @@ class BBoxCaptureController(QObject):
         self._previous_tool = None
         self._bar = None  # type: Optional[BBoxConfirmBar]
         self._plugin_window = None
+        self._hidden_panels = None  # type: Optional[dict]
         self._dataset_id = ""
         self._dataset_name = ""
         self._bbox_csv = ""
@@ -82,6 +83,7 @@ class BBoxCaptureController(QObject):
         self._active = True
         self._confirming = False
         self._bbox_csv = ""
+        self._hide_map_panels()
 
         try:
             self._container.datasets.ensure_basemap()
@@ -383,17 +385,45 @@ class BBoxCaptureController(QObject):
         self._previous_tool = None
         self._ignore_tool_change = False
 
-        if restore_window and self._plugin_window is not None:
-            try:
-                win = self._plugin_window
-                if win.isMinimized():
-                    win.showNormal()
-                win.raise_()
-                win.activateWindow()
-            except Exception:  # noqa: BLE001
-                pass
+        if restore_window:
+            self._restore_map_panels()
+            if self._plugin_window is not None:
+                try:
+                    win = self._plugin_window
+                    if win.isMinimized():
+                        win.showNormal()
+                    win.raise_()
+                    win.activateWindow()
+                except Exception:  # noqa: BLE001
+                    pass
+        self._hidden_panels = None
         self._plugin_window = None
         self._bbox_csv = ""
+
+    def _hide_map_panels(self) -> None:
+        if self._hidden_panels is not None:
+            return
+        hide_fn = getattr(self._container, "hide_map_panels", None)
+        if not callable(hide_fn):
+            return
+        try:
+            self._hidden_panels = hide_fn() or {}
+        except Exception:  # noqa: BLE001
+            LOG.exception("Could not hide map panels for clip")
+            self._hidden_panels = {}
+
+    def _restore_map_panels(self) -> None:
+        state = self._hidden_panels
+        self._hidden_panels = None
+        if state is None:
+            return
+        restore_fn = getattr(self._container, "restore_map_panels", None)
+        if not callable(restore_fn):
+            return
+        try:
+            restore_fn(state)
+        except Exception:  # noqa: BLE001
+            LOG.exception("Could not restore map panels after clip")
 
     def _rect_to_wsen(self, rect: QgsRectangle):
         canvas = self._container.iface.mapCanvas()

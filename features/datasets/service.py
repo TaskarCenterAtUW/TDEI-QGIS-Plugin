@@ -21,6 +21,7 @@ from ...features.osw.metadata import (
     DATASET_AREA_FILENAME,
     has_valid_dataset_area,
     load_geojson_file,
+    load_metadata_dict,
     metadata_from_dataset_raw,
     write_metadata_with_dataset_area,
     with_dataset_area_path,
@@ -109,8 +110,10 @@ class DatasetService:
         """GET OSW datasets, optionally filtered by *bbox* (W,S,E,N).
 
         Default scope is my groups (``include_my_groups=true``). Pass
-        ``DatasetScope.ALL`` to apply no project-group filter (admin). When
-        *project_group_id* is set, filters by ``tdei_project_group_id``.
+        ``DatasetScope.ALL`` to apply no project-group filter (no
+        ``include_my_groups`` and no ``tdei_project_group_id``). When
+        *project_group_id* is set to a real group UUID, filters by
+        ``tdei_project_group_id``.
         Optional *name* filters by dataset name. Pass ``bbox=None`` to
         search without a map-extent filter (name search).
         *status* is the API release status (``All``, ``Publish``, ``Pre-Release``).
@@ -161,11 +164,18 @@ class DatasetService:
 
         active_scope = scope or DatasetScope.MY_PROJECT_GROUPS
         selected_id = (project_group_id or "").strip()
+        # Combo sentinels must never be sent as tdei_project_group_id.
+        if selected_id in (
+            DatasetScope.ALL.value,
+            DatasetScope.MY_PROJECT_GROUPS.value,
+            "all",
+        ):
+            selected_id = ""
 
         if selected_id:
             params["tdei_project_group_id"] = selected_id
         elif active_scope == DatasetScope.ALL:
-            # No project-group filter (e.g. tdei-admin map search default).
+            # No project-group filter.
             pass
         else:
             # Default / My Project Groups
@@ -223,11 +233,13 @@ class DatasetService:
         metadata: Optional[dict] = None,
         raw: Optional[dict] = None,
     ) -> Tuple[str, str, bool]:
-        """Build concave-hull area, patch API metadata, PUT editMetadata.
+        """Build concave-hull area, update local metadata.json, PUT editMetadata.
 
-        Metadata is taken from the datasets API response (``raw`` / ``metadata``),
-        not from a downloaded package. OSW layers are still required locally to
-        compute the hull (download/extract first if needed).
+        Prefers the **downloaded package** ``metadata.json`` when present so the
+        cache stays in sync for later Validate / local workflows. Falls back to
+        the datasets API ``raw.metadata`` when there is no local metadata file.
+        Always writes ``dataset_area`` into the on-disk ``metadata.json`` under
+        the dataset cache (creating it if the package only had it inside the zip).
 
         :returns: ``(area_path, source_kind, added_to_map)``
         """
@@ -235,17 +247,22 @@ class DatasetService:
         if not dataset_id:
             raise ValueError("Dataset id is required.")
 
-        if metadata is None and raw is not None:
-            metadata = metadata_from_dataset_raw(raw)
-        if metadata is None:
-            metadata = self.fetch_dataset_metadata(dataset_id)
-
         if not self.has_local_package(dataset_id):
             raise ValueError(
                 "Local OSW layers are required to build the dataset area. "
                 "Download the dataset first."
             )
         cache_dir = self._layers.cache_path_for(dataset_id)
+
+        # Prefer existing downloaded metadata so we do not drop package fields.
+        base = load_metadata_dict(cache_dir)
+        if base is None:
+            if metadata is None and raw is not None:
+                metadata = metadata_from_dataset_raw(raw)
+            if metadata is None:
+                metadata = self.fetch_dataset_metadata(dataset_id)
+            base = metadata
+
         sources = [
             path
             for path in self._existing_geojsons(cache_dir)
@@ -256,7 +273,7 @@ class DatasetService:
         if area_geojson is None:
             raise ValueError("Could not read generated dataset_area.geojson.")
         metadata_path = write_metadata_with_dataset_area(
-            cache_dir, metadata, area_geojson
+            cache_dir, base, area_geojson
         )
         self._upload_metadata(dataset_id, metadata_path)
 

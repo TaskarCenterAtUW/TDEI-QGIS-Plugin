@@ -74,9 +74,13 @@ class JobsPage(QWidget):
         self._jobs: List[JobRecord] = []
         self._mapped: List[MappedItem] = []
         self._groups_ready = False
+        self._groups_loading = False
         self._project_group_id = ""
         self._job_id_query = ""
         self._build()
+        auth = container.auth
+        auth.login_succeeded.connect(self._on_auth_session_changed)
+        auth.logged_out.connect(self._on_auth_session_changed)
 
     def _build(self) -> None:
         set_page(
@@ -715,7 +719,22 @@ class JobsPage(QWidget):
             )
         )
 
+    def _on_auth_session_changed(self, *_args) -> None:
+        """Login/logout: the jobs project group belongs to the old user."""
+        self._groups_ready = False
+        self._project_group_id = ""
+        self._jobs = []
+        self._page = 1
+        self._has_more = True
+        self._table.setRowCount(0)
+        self._count.setText("")
+        if self.isVisible() and self._container.auth.is_authenticated():
+            self._load_project_groups()
+
     def _load_project_groups(self) -> None:
+        if self._groups_loading:
+            return
+        self._groups_loading = True
         self._set_status(self.tr("Loading project groups…"), busy=True)
         worker = self._container.workers.submit(
             self._container.project_groups.list_project_groups
@@ -724,6 +743,7 @@ class JobsPage(QWidget):
         worker.signals.error.connect(self._on_groups_error)
 
     def _on_groups_loaded(self, groups) -> None:
+        self._groups_loading = False
         self._groups_ready = True
         if not groups:
             self._project_group_id = ""
@@ -734,11 +754,20 @@ class JobsPage(QWidget):
             self._stack.setCurrentWidget(self._empty)
             self._set_status(self.tr("No project groups available."))
             return
-        # Jobs API requires a project group — use the first returned group.
-        self._project_group_id = str(groups[0].id or "").strip()
+        # Jobs API requires a project group — use the first returned group
+        # (with show_group_jobs so all of that group's jobs are listed).
+        self._project_group_id = next(
+            (
+                str(group.id or "").strip()
+                for group in groups
+                if str(getattr(group, "id", "") or "").strip()
+            ),
+            "",
+        )
         self.reload()
 
     def _on_groups_error(self, exc) -> None:
+        self._groups_loading = False
         self._groups_ready = True
         self._project_group_id = ""
         self._error.set_message(
@@ -803,15 +832,12 @@ class JobsPage(QWidget):
             return
         group_id = self._project_group_id
         if not group_id:
+            # No group from the last lookup (or it failed) — ask again.
             self._jobs = []
             self._page = 1
             self._has_more = False
-            self._empty.set_message(
-                self.tr("No project groups"),
-                self.tr("Join a project group to view jobs."),
-            )
-            self._stack.setCurrentWidget(self._empty)
             self._count.setText("")
+            self._load_project_groups()
             return
 
         self._page = 1
@@ -836,6 +862,7 @@ class JobsPage(QWidget):
             group_id,
             page_no=self._page,
             page_size=_PAGE_SIZE,
+            show_group_jobs=True,
             job_id=self._job_id_query,
             status=str(self._status.currentData() or ""),
         )

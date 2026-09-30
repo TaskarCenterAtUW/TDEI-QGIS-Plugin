@@ -323,6 +323,7 @@ class DatasetsPage(QWidget):
         self._scope.setMinimumWidth(dimensions.s(160))
         self._scope.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._scope.setFocusPolicy(Qt.StrongFocus)
+        self._scope.addItem(self.tr("All"), DatasetScope.ALL.value)
         self._scope.addItem(
             self.tr("My Project Groups"), DatasetScope.MY_PROJECT_GROUPS.value
         )
@@ -331,7 +332,10 @@ class DatasetsPage(QWidget):
             scope_label,
             self._scope,
             name=self.tr("Dataset Scope"),
-            description=self.tr("Filter datasets by project group scope."),
+            description=self.tr(
+                "Filter datasets by project group. "
+                "All applies no group filter."
+            ),
         )
         scope_col.addWidget(scope_label)
         scope_col.addWidget(self._scope)
@@ -772,16 +776,18 @@ class DatasetsPage(QWidget):
     def _on_scope_groups_loaded(self, groups) -> None:
         saved = str(
             self._container.settings.get(
-                "ui.dataset_scope", DatasetScope.MY_PROJECT_GROUPS.value
+                "ui.dataset_scope", DatasetScope.ALL.value
             )
-            or DatasetScope.MY_PROJECT_GROUPS.value
+            or DatasetScope.ALL.value
         )
         self._scope.blockSignals(True)
-        while self._scope.count() > 1:
-            self._scope.removeItem(1)
+        while self._scope.count() > 2:
+            self._scope.removeItem(2)
         for group in groups:
             self._scope.addItem(group.name, group.id)
         index = self._scope.findData(saved)
+        if index < 0:
+            index = self._scope.findData(DatasetScope.ALL.value)
         if index < 0:
             index = 0
         self._scope.setCurrentIndex(index)
@@ -829,6 +835,8 @@ class DatasetsPage(QWidget):
 
     def _current_scope_selection(self):
         data = self._scope.currentData()
+        if data == DatasetScope.ALL.value:
+            return DatasetScope.ALL, None
         if data == DatasetScope.MY_PROJECT_GROUPS.value or data in (None, ""):
             return DatasetScope.MY_PROJECT_GROUPS, None
         return DatasetScope.CURRENT_PROJECT_GROUP, str(data)

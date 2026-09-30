@@ -279,7 +279,13 @@ def set_dataset_area_on_metadata(metadata: dict, area_geojson: Any) -> dict:
 def write_metadata_with_dataset_area(
     cache_dir: str, metadata: dict, area_geojson: Any
 ) -> str:
-    """Patch *metadata* with area, write ``metadata.json`` under *cache_dir*."""
+    """Patch *metadata* with area and write ``metadata.json`` under *cache_dir*.
+
+    If a ``metadata.json`` already exists in the package extract tree, that path
+    is overwritten in place. Otherwise a new ``metadata.json`` is created at the
+    cache root (so later reads do not fall back to a stale copy inside
+    ``package.zip`` only).
+    """
     if not cache_dir:
         raise ValueError("Dataset cache folder is missing.")
     set_dataset_area_on_metadata(metadata, area_geojson)

@@ -53,6 +53,7 @@ Or copy this folder into your QGIS profile `python/plugins/tdei` and reload.
 
 | Doc | Purpose |
 |-----|---------|
+| [USER_HANDBOOK.md](docs/USER_HANDBOOK.md) | End-user guide (install, sign in, map search, datasets, jobs) |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, DI, map overlays, boundaries |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local setup, packaging & conventions |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Environments & settings |

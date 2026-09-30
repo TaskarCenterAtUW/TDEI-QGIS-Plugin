@@ -82,11 +82,18 @@ Map search (`qgis/map_search.py` + `ui/dialogs/map_search_bar.py`):
 
 Available from **map search** ⋮ and **Datasets** list ⋮ when area is missing:
 
-1. Take full **metadata** from the datasets API list item (`raw.metadata`) — not from a downloaded `metadata.json` alone
-2. Build a **concave hull** from local OSW layers (edges/nodes → vertices → `native:concavehull`; convex fallback). Fetch/extract the OSW package only if layers are not already cached
-3. Set `dataset_detail.dataset_area` and **PUT** multipart edit-metadata (`metadata/{tdei_dataset_id}`)
+1. Prefer the **downloaded package** `metadata.json` when present (keeps local
+   cache in sync for Validate / later jobs); otherwise use datasets API
+   `raw.metadata`
+2. Build a **concave hull** from local OSW layers (edges/nodes → vertices →
+   `native:concavehull`; convex fallback). Fetch/extract the OSW package only
+   if layers are not already cached
+3. Write `dataset_area` into on-disk `metadata.json` (in place if it already
+   exists under the cache), then **PUT** multipart edit-metadata
+   (`metadata/{tdei_dataset_id}`)
 
-Core helpers: `features/osw/generate_dataset_area.py`, `features/osw/metadata.py`, `DatasetService.add_dataset_area`.
+Core helpers: `features/osw/generate_dataset_area.py`, `features/osw/metadata.py`,
+`DatasetService.add_dataset_area`.
 
 ## Threading
 

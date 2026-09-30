@@ -90,6 +90,8 @@ class TdeiPlugin:
         self._container.open_main_window = self.open_main_window
         self._container.open_jobs = self.open_jobs
         self._container.sync_map_chrome = self._sync_map_chrome
+        self._container.hide_map_panels = self.hide_map_panels
+        self._container.restore_map_panels = self.restore_map_panels
         LOG.info("TDEI plugin initialized (open shortcut: %s)", shortcut)
 
     def unload(self) -> None:
@@ -122,6 +124,8 @@ class TdeiPlugin:
             self._main_window = None
         if self._container is not None:
             self._container.sync_map_chrome = None
+            self._container.hide_map_panels = None
+            self._container.restore_map_panels = None
             self._container.shutdown()
             self._container = None
         for action in self.actions:
@@ -246,6 +250,35 @@ class TdeiPlugin:
         except Exception:  # noqa: BLE001
             pass
 
+    def hide_map_panels(self) -> dict:
+        """Hide TDEI panel, map search and chrome so a map tool can use the canvas.
+
+        Returns what was visible, for :meth:`restore_map_panels`.
+        """
+        window = self._main_window
+        state = {
+            "main_window": bool(window is not None and window.isVisible()),
+            "chrome": bool(
+                self._map_chrome is not None and self._map_chrome.isVisible()
+            ),
+        }
+        self._stop_map_search_for_tdei()
+        if state["main_window"]:
+            try:
+                window.hide()
+            except Exception:  # noqa: BLE001
+                pass
+        self._hide_map_chrome()
+        return state
+
+    def restore_map_panels(self, state: Optional[dict] = None) -> None:
+        state = state or {}
+        if state.get("main_window") and self._main_window is not None:
+            self._attach_main_window_to_map()
+        if state.get("chrome") or state.get("main_window"):
+            self._show_map_chrome()
+        self._sync_map_chrome()
+
     def _ensure_container(self) -> None:
         if self._container is not None:
             return
@@ -254,6 +287,8 @@ class TdeiPlugin:
         self._container.open_main_window = self.open_main_window
         self._container.open_jobs = self.open_jobs
         self._container.sync_map_chrome = self._sync_map_chrome
+        self._container.hide_map_panels = self.hide_map_panels
+        self._container.restore_map_panels = self.restore_map_panels
         if self._map_search is None:
             self._map_search = MapSearchController(self._container)
         self._container.map_search = self._map_search

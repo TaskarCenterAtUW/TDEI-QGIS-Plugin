@@ -65,7 +65,7 @@ DEFAULTS: Dict[str, Any] = {
     "remember_username": True,
     "ui.selected_project_group_id": "",
     "ui.selected_project_group_name": "",
-    "ui.dataset_scope": "myProjectGroups",
+    "ui.dataset_scope": "all",
     "ui.jobs_project_group_id": "",
     # XYZ basemap streamed by QGIS (default OSM). Options: openstreetmap,
     # google_roadmap, google_satellite, none

@@ -170,7 +170,9 @@ Typing a name automatically searches outside the current view too.
 - **Double-click** a result, or press **Enter**, to zoom to it.
 - The **map icon** next to each result shows whether the dataset has an area: **green** means it has one, **red** means it's missing.
 - The **colored stripe** on the left of each result shows its status: **purple** for Publish, **yellow** for Pre-Release.
-- The **⋮** button opens more actions for that dataset (see [section 8](#8-add-a-missing-dataset-area)).
+- The **⋮** button opens more actions for that dataset:
+  - **Download** adds the dataset's OSW layers to the TDEI group. It shows **Add to map (cached)** if the dataset is already downloaded, **Zoom to dataset** if it's already on the map, and **Downloading…** while a download is running.
+  - **Add dataset area** builds a missing area (see [section 8](#8-add-a-missing-dataset-area)).
 - Right-click an area polygon on the map for its **TDEI** menu, which includes **Download**, **Zoom to dataset**, and **View OSW**.
 
 A **purple stripe moving along the left edge** of the panel means a search or action is still running.

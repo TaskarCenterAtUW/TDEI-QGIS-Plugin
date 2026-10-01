@@ -162,10 +162,13 @@ class MapSearchBar(QFrame):
     dataset_selected = pyqtSignal(str)  # highlight area (no zoom)
     dataset_zoom_requested = pyqtSignal(str)  # zoom map to dataset area
     add_dataset_area_requested = pyqtSignal(str)  # generate area when missing
+    download_requested = pyqtSignal(str)  # download / add to map / zoom
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("MapSearchBar")
+        # dataset_id -> (label, enabled, tooltip); read each time ⋮ opens.
+        self._download_state_fn = None
         apply_glass_frame(self)
         # Child of the canvas (not a Tool window) so it stays with the map view.
         self.setWindowFlags(Qt.Widget)
@@ -1177,7 +1180,7 @@ class MapSearchBar(QFrame):
     def _result_more_button(
         self, dataset_id: str, has_area: bool
     ) -> QToolButton:
-        """⋮ menu; Add dataset area is enabled only when area is missing."""
+        """⋮ menu: download, and Add dataset area (only when area is missing)."""
         more = QToolButton(self)
         more.setObjectName("MapSearchMoreButton")
         more.setCursor(Qt.PointingHandCursor)
@@ -1202,7 +1205,10 @@ class MapSearchBar(QFrame):
         set_name(
             more,
             self.tr("More actions"),
-            self.tr("Open actions for this dataset, such as add dataset area."),
+            self.tr(
+                "Open actions for this dataset, such as download or add "
+                "dataset area."
+            ),
         )
         more.setStyleSheet(
             "QToolButton#MapSearchMoreButton {{"
@@ -1223,6 +1229,43 @@ class MapSearchBar(QFrame):
         )
         menu = QMenu(more)
         menu.setToolTipsVisible(True)
+        menu.aboutToShow.connect(
+            partial(self._fill_result_menu, menu, dataset_id, has_area)
+        )
+        self._fill_result_menu(menu, dataset_id, has_area)
+        more.setMenu(menu)
+        return more
+
+    def set_download_state_provider(self, fn) -> None:
+        """*fn(dataset_id)* → ``(label, enabled, tooltip)`` for the ⋮ menu."""
+        self._download_state_fn = fn
+
+    def _download_menu_state(self, dataset_id: str):
+        fn = self._download_state_fn
+        if callable(fn):
+            try:
+                label, enabled, tip = fn(dataset_id)
+                return str(label), bool(enabled), str(tip or "")
+            except Exception:  # noqa: BLE001
+                pass
+        return (
+            self.tr("Download"),
+            True,
+            self.tr("Download OSW layers into the TDEI project group."),
+        )
+
+    def _fill_result_menu(self, menu: QMenu, dataset_id: str, has_area: bool) -> None:
+        menu.clear()
+        label, enabled, tip = self._download_menu_state(dataset_id)
+        download = menu.addAction(label)
+        download.setEnabled(enabled)
+        if tip:
+            download.setToolTip(tip)
+        if enabled:
+            download.triggered.connect(
+                partial(self.download_requested.emit, dataset_id)
+            )
+
         action = menu.addAction(self.tr("Add dataset area"))
         if has_area:
             action.setEnabled(False)
@@ -1240,8 +1283,6 @@ class MapSearchBar(QFrame):
             action.triggered.connect(
                 partial(self.add_dataset_area_requested.emit, dataset_id)
             )
-        more.setMenu(menu)
-        return more
 
     def set_zoom_ok(self, ok: bool) -> None:
         self._zoom_ok = bool(ok)

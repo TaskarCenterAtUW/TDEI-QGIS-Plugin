@@ -14,7 +14,7 @@ from qgis.core import (
 )
 
 from ..core.exceptions import AuthenticationError, SessionExpiredError, TdeiError
-from ..core.models import DatasetScope
+from ..core.models import DatasetLocalState, DatasetScope
 from ..features.jobs.bbox import format_bbox_csv
 from ..logging.logger import get_logger
 from ..ui.dialogs.map_search_bar import MapSearchBar
@@ -55,6 +55,7 @@ class MapSearchController(QObject):
         self._resume_view_timer.setInterval(2000)
         self._resume_view_timer.timeout.connect(self._end_view_search_suspend)
         self._adding_area_ids = set()  # type: set
+        self._downloading_ids = set()  # type: set
         self._last_datasets = []  # type: list
         try:
             self._container.auth.logged_out.connect(self._on_auth_session_changed)
@@ -185,6 +186,8 @@ class MapSearchController(QObject):
             self._bar.add_dataset_area_requested.connect(
                 self._on_add_dataset_area_requested
             )
+            self._bar.download_requested.connect(self._on_download_requested)
+            self._bar.set_download_state_provider(self._download_menu_state)
         else:
             self._bar.bind_iface(iface)
         self._refresh_name_suggestions()
@@ -252,6 +255,11 @@ class MapSearchController(QObject):
             )
         except Exception:  # noqa: BLE001
             pass
+        try:
+            self._bar.download_requested.disconnect(self._on_download_requested)
+        except Exception:  # noqa: BLE001
+            pass
+        self._bar.set_download_state_provider(None)
         try:
             self._bar.detach_from_canvas()
         except Exception:  # noqa: BLE001
@@ -470,7 +478,7 @@ class MapSearchController(QObject):
         if not self._active:
             self._adding_area_ids.discard(dataset_id)
             if self._bar is not None:
-                self._bar.set_busy(False)
+                self._release_busy()
             return
         self._finish_add_dataset_area(dataset_id)
 
@@ -504,7 +512,7 @@ class MapSearchController(QObject):
 
         self._adding_area_ids.discard(dataset_id)
         if self._bar is not None:
-            self._bar.set_busy(False)
+            self._release_busy()
         try:
             self._container.datasets.invalidate_cache()
         except Exception:  # noqa: BLE001
@@ -536,7 +544,7 @@ class MapSearchController(QObject):
     def _on_add_dataset_area_error(self, dataset_id: str, exc) -> None:
         self._adding_area_ids.discard(dataset_id)
         if self._bar is not None:
-            self._bar.set_busy(False)
+            self._release_busy()
         if isinstance(exc, (AuthenticationError, SessionExpiredError)):
             message = self.tr("Session expired. Please sign in again.")
             self._container.notifications.warning(message)
@@ -553,6 +561,181 @@ class MapSearchController(QObject):
         except Exception:  # noqa: BLE001
             pass
         LOG.warning("Add dataset area failed for %s: %s", dataset_id, exc)
+
+    def _release_busy(self) -> None:
+        """Clear the busy stripe unless a download / add-area is still running."""
+        if self._bar is None:
+            return
+        if self._downloading_ids:
+            self._bar.set_busy(True, self.tr("Downloading dataset…"))
+        elif self._adding_area_ids:
+            self._bar.set_busy(True, self.tr("Adding dataset area…"))
+        else:
+            self._bar.set_busy(False)
+
+    def _display_name_for(self, dataset_id: str) -> str:
+        wanted = str(dataset_id or "").strip()
+        for dataset in self._last_datasets or []:
+            if str(getattr(dataset, "id", "") or "").strip() == wanted:
+                return str(getattr(dataset, "display_name", "") or wanted)
+        return wanted
+
+    def _download_menu_state(self, dataset_id: str):
+        """⋮ menu label for download: Download / Add to map / Zoom / busy."""
+        dataset_id = str(dataset_id or "").strip()
+        if dataset_id in self._downloading_ids:
+            return self.tr("Downloading…"), False, ""
+        try:
+            state = self._container.datasets.local_state(dataset_id)
+        except Exception:  # noqa: BLE001
+            state = DatasetLocalState.REMOTE
+        if state == DatasetLocalState.LOADED:
+            return (
+                self.tr("Zoom to dataset"),
+                True,
+                self.tr("Already in the project — zoom to this dataset."),
+            )
+        if state == DatasetLocalState.CACHED:
+            return (
+                self.tr("Add to map (cached)"),
+                True,
+                self.tr("Add the downloaded OSW layers to the TDEI group."),
+            )
+        return (
+            self.tr("Download"),
+            True,
+            self.tr("Download OSW layers into the TDEI project group."),
+        )
+
+    def _on_download_requested(self, dataset_id: str) -> None:
+        dataset_id = str(dataset_id or "").strip()
+        if not dataset_id or dataset_id in self._downloading_ids:
+            return
+        if not self._container.auth.is_authenticated():
+            self._container.notifications.warning(
+                self.tr("Sign in first, then download the dataset.")
+            )
+            open_fn = getattr(self._container, "open_main_window", None)
+            if callable(open_fn):
+                open_fn()
+            return
+
+        datasets = self._container.datasets
+        try:
+            state = datasets.local_state(dataset_id)
+        except Exception:  # noqa: BLE001
+            state = DatasetLocalState.REMOTE
+        if state == DatasetLocalState.LOADED:
+            self._zoom_to_loaded_dataset(dataset_id)
+            return
+
+        name = self._display_name_for(dataset_id)
+        message = self.tr("Downloading {name}…").format(name=name)
+        self._downloading_ids.add(dataset_id)
+        if self._bar is not None:
+            self._bar.set_busy(True, message)
+        try:
+            self._container.status.busy(message)
+        except Exception:  # noqa: BLE001
+            pass
+        project_gen = self._container.project.generation
+        worker = self._container.workers.submit(
+            datasets.prepare_package, dataset_id
+        )
+        worker.signals.result.connect(
+            partial(self._on_download_package_ready, dataset_id, name, project_gen)
+        )
+        worker.signals.error.connect(
+            partial(self._on_download_error, dataset_id)
+        )
+
+    def _on_download_package_ready(
+        self, dataset_id: str, name: str, project_gen: int, prepared
+    ) -> None:
+        if project_gen != self._container.project.generation:
+            self._downloading_ids.discard(dataset_id)
+            self._release_busy()
+            self._container.status.ready(
+                self.tr(
+                    "Download kept in cache — QGIS project changed before "
+                    "layers were added."
+                )
+            )
+            return
+        try:
+            geojsons, source = prepared
+        except Exception:  # noqa: BLE001
+            self._on_download_error(dataset_id, prepared)
+            return
+        try:
+            self._container.status.busy(self.tr("Adding layers to QGIS…"))
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            self._container.datasets.ensure_basemap()
+            result = self._container.datasets.add_to_map(
+                dataset_id,
+                geojsons,
+                source,
+                display_name=name or "",
+                zoom=False,
+            )
+        except Exception as exc:  # noqa: BLE001
+            self._on_download_error(dataset_id, exc)
+            return
+        self._downloading_ids.discard(dataset_id)
+        self._release_busy()
+
+        hook = getattr(self._container, "on_dataset_loaded", None)
+        if callable(hook):
+            try:
+                hook(result)
+                return
+            except Exception:  # noqa: BLE001
+                LOG.exception("on_dataset_loaded hook failed")
+        if result.source == "already_loaded":
+            msg = self.tr("Dataset is already loaded.")
+        elif result.source == "cache":
+            msg = self.tr(
+                "Added {n} layer(s) from cache. Available under Mapped."
+            ).format(n=result.layer_count)
+        else:
+            msg = self.tr(
+                "Loaded {n} layer(s) into QGIS. Available under Mapped."
+            ).format(n=result.layer_count)
+        self._container.status.ready(msg)
+        self._container.notifications.success(msg)
+
+    def _on_download_error(self, dataset_id: str, exc) -> None:
+        self._downloading_ids.discard(dataset_id)
+        self._release_busy()
+        if isinstance(exc, (AuthenticationError, SessionExpiredError)):
+            self._container.status.ready(
+                self.tr("Session expired. Please sign in again.")
+            )
+            self._container.notifications.warning(
+                self.tr("Your session has expired. Please sign in again.")
+            )
+            return
+        message = (
+            str(exc)
+            if isinstance(exc, TdeiError)
+            else self.tr("Could not load dataset: {}").format(exc)
+        )
+        self._container.status.ready(message)
+        self._container.notifications.error(message)
+        LOG.warning("Map search download failed for %s: %s", dataset_id, exc)
+
+    def _zoom_to_loaded_dataset(self, dataset_id: str) -> None:
+        self._begin_view_search_suspend()
+        try:
+            self._container.layers.zoom_to_dataset(dataset_id)
+            self._container.status.show(self.tr("Zoomed to dataset."), 2500)
+        except Exception:  # noqa: BLE001
+            LOG.exception("Could not zoom to loaded dataset %s", dataset_id)
+            self._container.notifications.error(
+                self.tr("Could not zoom to that dataset.")
+            )
 
     def _begin_view_search_suspend(self) -> None:
         self._suspend_view_search = True
@@ -634,7 +817,7 @@ class MapSearchController(QObject):
         if not zoom_ok and not ignore_extent:
             self._debounce.stop()
             if self._bar is not None:
-                self._bar.set_busy(False)
+                self._release_busy()
                 self._bar.set_results([])
                 self._bar.set_result_count(0)
             try:
@@ -723,7 +906,7 @@ class MapSearchController(QObject):
             return
         count = len(painted or [])
         if self._bar is not None:
-            self._bar.set_busy(False)
+            self._release_busy()
             # List all API hits (area indicator); overlays only for valid areas.
             self._bar.set_results(rows)
             self._bar.set_result_count(len(rows))
@@ -751,7 +934,7 @@ class MapSearchController(QObject):
         if not self._active or gen != self._fetch_gen:
             return
         if self._bar is not None:
-            self._bar.set_busy(False)
+            self._release_busy()
             self._bar.set_results([])
             self._bar.set_result_count(0)
         if isinstance(exc, (AuthenticationError, SessionExpiredError)):

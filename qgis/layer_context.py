@@ -79,11 +79,10 @@ class LayerContextMenuController(QObject):
     def attach(self) -> None:
         if self._attached:
             return
-        # Jobs submenu (layer tree) — only when the jobs feature is on.
-        if self._container.settings.feature_enabled("jobs"):
-            view = self._container.iface.layerTreeView()
-            if view is not None:
-                view.contextMenuAboutToShow.connect(self._on_layer_tree_menu)
+        # Layer tree: routability always; jobs submenu only when jobs are on.
+        view = self._container.iface.layerTreeView()
+        if view is not None:
+            view.contextMenuAboutToShow.connect(self._on_layer_tree_menu)
         # Inject TDEI menu into the native QGIS map canvas context menu.
         self._attach_canvas()
         self._attached = True
@@ -183,6 +182,8 @@ class LayerContextMenuController(QObject):
         node = view.currentNode()
         dataset_id = self._container.layers.dataset_id_from_node(node)
         if not dataset_id:
+            # Any edges GeoJSON (not only TDEI downloads) can be routed.
+            self._add_routability_action(menu, node, "")
             return
 
         layer = node.layer() if hasattr(node, "layer") else None
@@ -226,9 +227,45 @@ class LayerContextMenuController(QObject):
             )
             return
 
+        self._add_routability_action(menu, node, dataset_id)
         if not self._container.settings.feature_enabled("jobs"):
             return
         self._add_jobs_submenu(menu, dataset_id)
+
+    def _add_routability_action(self, menu, node, dataset_id: str) -> None:
+        from .routability import find_edges_layer, is_edges_layer
+
+        layer = node.layer() if hasattr(node, "layer") else None
+        if not is_edges_layer(layer):
+            layers = []
+            if dataset_id:
+                layers = self._container.layers.layers_in_dataset(dataset_id)
+            elif hasattr(node, "findLayers"):
+                layers = [child.layer() for child in node.findLayers()]
+            layer = find_edges_layer(layers)
+        if layer is None:
+            return
+        menu.addSeparator()
+        action = menu.addAction(self.tr("TDEI Routability…"))
+        action.setToolTip(
+            self.tr(
+                "Pick a start edge and a destination on {name} and draw the "
+                "route over the map."
+            ).format(name=layer.name())
+        )
+        action.triggered.connect(partial(self._start_routability, layer))
+
+    def _start_routability(self, layer, _checked: bool = False) -> None:
+        controller = getattr(self._container, "routability", None)
+        if controller is None:
+            return
+        title = layer.name()
+        dataset_id = str(layer.customProperty("tdei_dataset_id") or "").strip()
+        if dataset_id:
+            name = self._container.layers.read_cache_display_name(dataset_id)
+            if name:
+                title = "{} — {}".format(name, layer.name())
+        controller.start(layer, title)
 
     def _populate_tdei_actions(
         self,

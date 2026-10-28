@@ -271,6 +271,21 @@ Every dataset should have a **dataset area**: a polygon showing where its data i
 
 ![Clip bounding box being drawn, with the confirmation bar](images/handbook/09-clip-bbox.png)
 
+### Check routability
+
+Check whether you can get from one place to another along a dataset's edges, and see the route drawn on the map.
+
+1. In the QGIS **Layers** panel, right-click a downloaded dataset group or its edges layer, then choose **TDEI Routability…**. This also works for any edges GeoJSON line layer that has `_u_id` and `_v_id` fields.
+2. The TDEI panels hide and the **Routability** toolbar appears. Click on an **edge** (a line) on the map to set the start. A green dot marks where you clicked.
+3. Click your **destination** anywhere on the map. It snaps to the nearest edge and shows as a red dot.
+4. The route is drawn in orange from the green dot to the red dot, on top of the map, in a layer named **Route — *dataset***. The toolbar shows the number of edges and the total distance.
+   - If there's no way through, a **Reachable — *dataset*** layer shows every edge you *can* reach from the start edge instead.
+5. Click another destination to try again, **Clear** to start over, or **Done** (or Esc) to close the tool. The route layer stays on the map until you remove it.
+
+Edges connect through their `_u_id` (start node) and `_v_id` (end node). Routes can use edges in either direction and pick the shortest walking distance.
+
+![Routability toolbar with a start edge, destination, and orange route](images/handbook/09-routability.png)
+
 ---
 
 ## 10. Preview OSW without downloading
@@ -375,6 +390,8 @@ Click the environment name in the TDEI panel's **status bar** and choose another
 | **Session expired** message | Sign in again. Your downloads and layers aren't affected. |
 | Layers disappeared after reopening QGIS | Click **Sync** in the TDEI panel header. |
 | Job won't submit: "not in a valid OSW naming convention" | Rename the GeoJSON layers to OSW names (`edges`, `nodes`, and so on) and try again. |
+| No **TDEI Routability…** in the layer menu | The layer (or group) has no line layer with `_u_id` and `_v_id` fields. Download the dataset first, or check the edges file. |
+| Routability says "No route" | The start and destination aren't connected in the data. The **Reachable** layer shows how far you can get from the start edge. |
 | Plugin looks out of date after an upgrade | Restart QGIS. |
 
 For anything else, open **View → Panels → Log Messages** in QGIS, select the **TDEI** tab, and share what it says with your support contact.

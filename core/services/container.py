@@ -105,6 +105,7 @@ class ServiceContainer:
         self.map_search = None
         self.bbox_capture = None
         self.osw_preview = None
+        self.routability = None
 
     def refresh_environment(self) -> None:
         self.api.reload_base_url()

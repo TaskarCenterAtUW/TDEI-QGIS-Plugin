@@ -10,6 +10,7 @@ Production-grade QGIS plugin for the [TDEI](https://tdei.us) OpenSidewalks platf
 - **Add dataset area** — ⋮ menu builds a concave-hull `dataset_area`, patches API metadata, submits edit-metadata
 - **Sync** header action restores layers from local cache after a crash
 - Submit OpenAPI-defined TDEI jobs from the layer context menu
+- **Routability** — pick a start edge and destination on an edges layer; shortest route (via `_u_id` / `_v_id`) drawn over the map
 - Background workers (non-blocking UI), toasts, confirmations, theme
 
 ## Requirements
@@ -55,6 +56,7 @@ Or copy this folder into your QGIS profile `python/plugins/tdei` and reload.
 |-----|---------|
 | [USER_HANDBOOK.md](docs/USER_HANDBOOK.md) | End-user guide (install, sign in, map search, datasets, jobs) |
 | [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Layers, DI, map overlays, boundaries |
+| [ROUTABILITY.md](docs/ROUTABILITY.md) | Routability tool: graph model, Dijkstra path selection, distance maths |
 | [DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local setup, packaging & conventions |
 | [CONFIGURATION.md](docs/CONFIGURATION.md) | Environments & settings |
 | [AUTHENTICATION.md](docs/AUTHENTICATION.md) | Tokens & session UX |

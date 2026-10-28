@@ -18,6 +18,7 @@ from .logging.logger import configure_logging, get_logger
 from .qgis.layer_context import LayerContextMenuController
 from .qgis.map_search import MapSearchController
 from .qgis.osw_preview import OswPreviewController
+from .qgis.routability import RoutabilityController
 from .ui.dialogs.map_chrome import MapChromeBar
 
 if TYPE_CHECKING:
@@ -40,6 +41,7 @@ class TdeiPlugin:
         self._layer_context: Optional[LayerContextMenuController] = None
         self._map_search: Optional[MapSearchController] = None
         self._osw_preview: Optional[OswPreviewController] = None
+        self._routability: Optional[RoutabilityController] = None
         self._map_chrome: Optional[MapChromeBar] = None
         self._open_action: Optional[QAction] = None
         self._map_search_action: Optional[QAction] = None
@@ -85,6 +87,8 @@ class TdeiPlugin:
         self._container.map_search = self._map_search
         self._osw_preview = OswPreviewController(self._container)
         self._container.osw_preview = self._osw_preview
+        self._routability = RoutabilityController(self._container)
+        self._container.routability = self._routability
         self._layer_context = LayerContextMenuController(self._container)
         self._layer_context.attach()
         self._container.open_main_window = self.open_main_window
@@ -95,6 +99,12 @@ class TdeiPlugin:
         LOG.info("TDEI plugin initialized (open shortcut: %s)", shortcut)
 
     def unload(self) -> None:
+        if self._routability is not None:
+            try:
+                self._routability.finish(silent=True)
+            except Exception:  # noqa: BLE001
+                pass
+            self._routability = None
         self._hide_map_chrome()
         if self._osw_preview is not None:
             try:
@@ -111,6 +121,7 @@ class TdeiPlugin:
         if self._container is not None:
             self._container.map_search = None
             self._container.osw_preview = None
+            self._container.routability = None
         if self._layer_context is not None:
             self._layer_context.detach()
             self._layer_context = None
@@ -295,6 +306,9 @@ class TdeiPlugin:
         if self._osw_preview is None:
             self._osw_preview = OswPreviewController(self._container)
         self._container.osw_preview = self._osw_preview
+        if self._routability is None:
+            self._routability = RoutabilityController(self._container)
+        self._container.routability = self._routability
 
     def open_jobs(self, job_id: str = "") -> None:
         """Show the plugin window on the Jobs tab, optionally filtered to a job."""
